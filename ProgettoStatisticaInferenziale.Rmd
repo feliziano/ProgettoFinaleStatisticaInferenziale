@@ -98,9 +98,28 @@ La selezione stepwise basata sull'AIC ha rimosso le variabili non significative.
 par(mfrow = c(2,2))
 plot(stepwise_model)
 ```
+- Il grafico dei Residui vs Valori Predetti mostra che i valori si distribuiscono in modo casuale solo dopo i 2000 grammi circa. Per cercare di migliorare la diagnostica si verifichera successivamente la presenza di una relazione non lineare di alcune variabili.
 
+```{r}
+# Selezione delle variabili numeriche
+variabili_numeriche <- data[, c("Anni.madre", "N.gravidanze", "Gestazione", "Peso", "Lunghezza", "Cranio")]
 
+# Creazione della matrice di scatter plot
+pairs(variabili_numeriche, main = "Matrice di Scatter Plot delle Variabili Numeriche")
 
+```
+- Introduciamo nel modello variabile Lunghezza al quadrato perchè nella matrice di scatterplot sembra avere una relazione quadreatica con il peso.
+
+```{r}
+model2 <- update(stepwise_model,~. +I(Lunghezza^2))
+summary(model2)
+```
+- La relazione quadratica Lunghezza^2 ha un p-value < 0.05 pertanto è significativa. 
+```{r}
+par(mfrow = c(2,2))
+plot(model2)
+```
+-Il grafico dei Residui VS Valori Predetti ha una distribuzione piu randomica rispetto alla precedente diagnostica, pertanto il modello si puo considerare migliorato.
 
 <h2>Validazione del modello con train-test split</h2>
 ```{r}
@@ -111,9 +130,9 @@ test_data <- data[-train_index, ]
 ```
 <h3>Addestramento del modello sul training set</h3>
 ```{r}
-stepwise_model_train <- stepAIC(model, direction = "both", data = train_data)
+stepwise_model_train <- stepAIC(stepwise_model, direction = "both", data = train_data)
 ```
-<h3>Previsioni sul test set</h3>
+<h3>Previsioni sul test set (Primo modello)</h3>
 ```{r}
 predictions_test <- predict(stepwise_model_train, newdata = test_data)
 ```
@@ -123,6 +142,27 @@ rmse_test <- sqrt(mean((test_data$Peso - predictions_test)^2))
 r2_test <- cor(test_data$Peso, predictions_test)^2
 cat("RMSE (Test):", rmse_test, "\nR-squared (Test):", r2_test, "\n")
 ```
+<h3>Addestramento del modello sul training set(Secondo Modello)</h3>
+```{r}
+stepwise_model_train <- stepAIC(model2, direction = "both", data = train_data)
+```
+
+
+<h3>Previsioni sul test set (Secondo modello)</h3>
+```{r}
+predictions_test <- predict(stepwise_model_train, newdata = test_data)
+```
+<h3>Metriche di performance</h3>
+```{r}
+rmse_test <- sqrt(mean((test_data$Peso - predictions_test)^2))
+r2_test <- cor(test_data$Peso, predictions_test)^2
+cat("RMSE (Test):", rmse_test, "\nR-squared (Test):", r2_test, "\n")
+```
+
+-Il secondo modello, che considera la lunghezza al quadrato, ha un indice R quadro piu alto rispetto al primo, pertanto si puo dire che è piu affidabile nel effettuare stime predittive.
+
+
+
 L'RMSE di ```{r}round(rmse_test, 2)``` grammi indica che, in media, le previsioni del modello si discostano dai valori reali di circa  ```{r}round(rmse_test, 2)``` grammi. L'R² di ```{r}round(r2test, 2)``` suggerisce che il modello spiega circa il ```{r}round(r2_test * 100, 2)```% della variabilità del peso dei neonati.
 
 
@@ -192,22 +232,22 @@ ggplot(cor_melted, aes(x = Var1, y = Var2, fill = value)) +
 ```{r}
 # Creazione di un nuovo caso da predire
 new_case <- data.frame(
-  Eta_Madre = mean(data$Anni.madre),  # Supponiamo un'età media della madre
-  N.gravidanze = 3,  # Terza gravidanza
-  Fumatrici = 0,  # Supponiamo che la madre non fumi
-  Gestazione = 39,  # 39 settimane di gestazione
-  Lunghezza = mean(data$Lunghezza),  # Valore medio della lunghezza
-  Cranio = mean(data$Cranio),  # Valore medio del diametro cranico
-  Tipo.parto = "Nat",  # Supponiamo un parto naturale
-  Ospedale = "osp1",  # Supponiamo che sia nato nell'ospedale 1
-  Sesso = "F"  # Neonata femmina
+  Eta_Madre = mean(data$Anni.madre),
+  N.gravidanze = 3,  
+  Fumatrici = 0,
+  Gestazione = 39,  # 
+  Lunghezza = mean(data$Lunghezza), 
+  Cranio = mean(data$Cranio), 
+  Tipo.parto = "Nat",  
+  Ospedale = "osp1",  
+  Sesso = "F"  
 )
 
 # Effettuare la previsione utilizzando il modello
 predicted_weight <- predict(stepwise_model, newdata = new_case)
 
 # Stampare il risultato
-cat("Il peso previsto della neonata è:", round(predicted_weight, 2), "grammi\n")
+cat("Il peso previsto della neonata per una madre non fumatrice, alla terza gravidanza, con un tempo di gestazione di 39 settimane, con parto naturale e con sesso Femmina è:", round(predicted_weight, 2), "grammi\n")
 
 ```
 
