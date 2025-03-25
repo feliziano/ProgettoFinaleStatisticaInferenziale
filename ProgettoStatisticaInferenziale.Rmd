@@ -1,15 +1,16 @@
 ---
-title: "Progetto_finale_statistica_inferenziale"
+title: "Modello Statistico per la Previsione del Peso Neonatale (Progetto finale modulo statistica inferenziale)"
 author: "Feliziano Copponi"
 date: "2025-03-04"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
 ```
 
-<h3>Caricamento delle librerie necessarie</h3>
+### Caricamento delle librerie necessarie</h3>
+
 ```{r cars}
 # Caricamento delle librerie necessarie
 library(ggplot2)
@@ -23,63 +24,259 @@ library(reshape2)
 # Lettura dei dati
 data <- read.csv("neonati.csv")
 ```
-<h1>Preprocessing</h1>
-<h2>Sostituzione dei valori mancanti con la media per le variabili numeriche</h2>
 
+## Vengono mostrate le prime righe del dataset per visualizzare la tipologia di variabili.
 
 ```{r}
-# Gestione dei valori mancanti
-data <- data %>%
-  mutate(across(where(is.numeric), ~ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
-  drop_na()
+head(data)
+```
+
+### Mappiamo le variabili categoriche in interi per eventuali successive analisi nella fase di creazione del modello di regressione
+
+```{r}
+print(levels(data$Tipo.parto))
+print(levels(data$Ospedale))
+print(levels(data$Sesso))
+
+data$Tipo.parto <- as.factor(data$Tipo.parto)
+data$Ospedale <- as.factor(data$Ospedale)
+data$Sesso <- as.factor(data$Sesso)
 
 
-# Creazione di una variabile numerica per il tipo di parto
-data <- data %>%
-  mutate(Tipo.parto_num = ifelse(Tipo.parto == "Ces", 1, 0))
+data$Tipo.parto_num <- as.numeric(data$Tipo.parto)
+data$osp_num <- as.numeric(data$Ospedale)
+data$sesso_num <- as.numeric(data$Sesso)
+
+
+
+head(data)
+```
+
+### Suddividiamo in classi la variabile peso per visualizzarne la distribuzione.
+
+```{r}
+breaks <- seq(min(data$Peso),
+              max(data$Peso),
+              length.out=6)
+
+data$Peso_class<-cut(x = data$Peso,breaks = breaks,dig.lab = 10)
 ```
 
 ```{r}
-summary(data)
-descriptive_stats <- data %>% summarise_all(funs(mean, sd, min, max))
-print(descriptive_stats)
+# Caricamento del pacchetto necessario
+library(knitr)
+
+# Supponiamo che 'data' sia il tuo data frame e 'Peso' la variabile di interesse
+# Calcolo delle statistiche riassuntive
+statistiche <- c(summary(data$Peso), "Deviazione standard" = sd(data$Peso),
+  "Range (max-min)" = diff(range(data$Peso)))
+
+# Conversione delle statistiche in un data frame
+statistiche_peso <- data.frame(Statistiche = names(statistiche), Valore = as.numeric(statistiche))
+
+# Visualizzazione della tabella con kable
+kable(statistiche_peso, col.names = c("Statistiche", "Valore"), caption = "Statistiche Riassuntive del Peso")
+
 ```
-<ul>
-<li>Il peso medio dei neonati è di 3284.08 grammi, con una deviazione standard di 525.04 grammi.</li>
-La durata media della gestazione è di 38.98 settimane, con una <li>deviazione standard di 1.87 settimane.
-Il 29.12% dei parti è stato cesareo (Tipo.parto_num = 1).</li>
-</ul>
 
 ```{r}
-cesareo_table <- table(data$Tipo.parto_num, data$Ospedale)
-chisq.test(cesareo_table)
 
 ```
-<br>Il test del chi-quadro confronta la distribuzione dei parti cesarei tra i tre ospedali. Il <b>p-value</b> di <b>0.5778</b> (> 0.05) indica che non ci sono differenze significative nella frequenza dei parti cesarei tra gli ospedali.
+
+
+## Visualizziamo le classi di peso
+
+```{r}
+ggplot(data = data) +
+  geom_bar(aes(x = Peso_class)) +
+  labs(x = "Peso(6 intervalli)", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Distribuzione del peso dei neonati su Grafico Boxplot 
+
+Ho applicato una scala logaritmica in modo da evidenziare gli outliers per i pesi piu bassi poichè sono quelli che meritano maggiore attenzione.
+
+Gli outliers hanno valori comunque in linea con le dimensioni del fenomeno oggetto di studio(830g, per esempio,è un peso plausibile per un neonato alla nascita sebbene estremamente basso.), pertanto non si vede la necessita di trattarli in modo particolare.
+
+```{r}
+
+# Calcolo della mediana per la variabile peso( per evidenziarla nel grafico)
+
+
+minimo <- statistiche["Min."]
+primo_quartile <- statistiche["1st Qu."]
+mediana <- statistiche["Median"]
+media <- statistiche["Mean"]
+terzo_quartile <- statistiche["3rd Qu."]
+massimo <- statistiche["Max."]
+
+
+library(ggplot2)
+# Grafico boxplot
+ggplot(data, aes(y = Peso)) +
+  geom_boxplot(
+    outlier.color = "red",      
+    outlier.shape = 16,          
+    outlier.size = 0.5            
+  ) +
+  
+  scale_y_continuous(limits = c(0, 10000))+
+  geom_hline(
+    yintercept = mediana, 
+    color = "red")+
+  annotate("text", x = -0.5, y = mediana, label = paste( round(mediana, 2)),
+           color = "red", vjust = -1, hjust = 0) +
+  geom_hline(
+    yintercept = minimo, 
+    color = "red")+
+  annotate("text", x = -0.5, y = minimo, label = paste( round(minimo, 2)),
+           color = "red", vjust = -1, hjust = 0)+
+  geom_hline(
+    yintercept = massimo, 
+    color = "red")+
+  annotate("text", x = -0.5, y = massimo, label = paste( round(massimo, 2)),
+           color = "red", vjust = -1, hjust = 0) +
+  theme_classic() +
+   scale_y_log10() +
+  labs(title = "Distribuzione del peso dei neonati su Grafico Boxplot")
+
+
+```
+
+Visualizziamo un istogramma per verificare graficamente se il campione ha una distribuzione Normale.
+
 
 
 ```{r}
-t.test(data$Peso, mu = 3200)
+breaks <- seq(min(data$Peso),
+              max(data$Peso),
+              length.out=120)
+
+ggplot(data = data)+
+  labs(x= "Peso(120 intervalli)", y = "Count" )+
+  geom_histogram(aes(x=cut(x = data$Peso,breaks = breaks,dig.lab = 10)),stat="count")
+```
+---
+Dal grafico a istogrammi si puo constatare che la distribuzione ha una distribuzione molto simile ad una normale.
+---
+
+## Verifica analitica sulla normalita della distribuzione.
+### Eseguo un test per verificare se i dati del campione si distribuiscono come una normale.
+```{r}
+shapiro.test(data$Peso)
+```
+---
+Il test ha un p-value molto inferiore a 0.05, pertanto il campione ha una distribuzione normale
+---
+
+Si effettua un test t sulla variabile peso per saggiare l'ipotesi che la media del campione sia uguale alla media della popolazione, che in questo caso non è nota.
+---
+```{r}
+mean(data$Peso)  
+t.test(data$Peso)$conf.int
 
 ```
-<br>Peso: Il test t a un campione confronta la media del peso dei neonati con un valore ipotetico di 3200 grammi.<p> Il <b>p-value</b> di <b>1.782e-15</b> (< 0.05) indica che la media del peso nel campione è significativamente diversa da 3200 grammi.</p> La media osservata è 3284.08 grammi.
+---
+Con il 95% di confidenza, la media vera del peso nella popolazione è tra 3263.490 e 3304.672.La media del campione appartiene all'intervallo individuato dal t test, pertanto è signicativamente uguale alla media della popolazione.
+--- 
 
 ```{r}
-t.test(data$Lunghezza, mu = 50)
+
 ```
-Lunghezza: Il test t confronta la lunghezza media dei neonati con un valore ipotetico di 50 cm. Il p-value di < 2.2e-16 (< 0.05) indica che la lunghezza media nel campione è significativamente diversa da 50 cm. La media osservata è 494.69 cm.
+
+
+---
+
+
+---
+- La durata media della gestazione è di 38.98 settimane, con una deviazione standard di 1.87 settimane.
+---
+
+---
+- Il 29.12% dei parti è stato cesareo (Tipo.parto_num = 1).
+---
 
 ```{r}
-t.test(Peso ~ Sesso, data = data)
+cesareo_table <- table(data$Tipo.parto, data$Ospedale)
+
+cesareo_df <- as.data.frame(cesareo_table)
+names(cesareo_df) <- c("Tipo_parto", "Ospedale", "Conteggio")
+
+
+ggplot(cesareo_df, aes(x = Ospedale, y = Conteggio, fill = Tipo_parto)) +
+  geom_bar(stat = "identity", position = "dodge") +  
+  labs(
+    title = "Conteggio dei tipi di parto per ospedale",
+    x = "Ospedale",
+    y = "Numero di parti",
+    fill = "Tipo parto"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+---
+A livello grafico si può osservare che non ci sono significative differenze  fra il tipo di parto per ospedale.
+---
+
+```{r}
 
 
 ```
-Peso: Il test t a due campioni confronta il peso medio dei neonati maschi e femmine. Il p-value di < 2.2e-16 (< 0.05) indica che ci sono differenze significative tra i sessi. I maschi hanno un peso medio di 3408.22 grammi, mentre le femmine hanno un peso medio di 3161.13 grammi.
+
+### Eseguiamo un t test a due campioni indipendenti per saggiare l'ipotesi che il peso medio sia significativamente diverso rispetto al sesso. 
+
+```{r}
+library(broom)
+test <- t.test(Peso ~ Sesso, data = data)
+
+df_results <- data.frame(
+  "Metrica" = c("Statistica t", "Gradi di libertà", "p-value", 
+                "Confidenza (low)", "Confidenza (high)",
+                "Media gruppo F", "Media gruppo M",
+                "Ipotesi alternativa", "Metodo"),
+  "Valore" = c(test$statistic, test$parameter, test$p.value,
+               test$conf.int[1], test$conf.int[2],
+               test$estimate[1], test$estimate[2],
+               test$alternative, test$method)
+)
+
+kable(df_results, align = 'l')
+```
+---
+Il p-value osservato è molto inferiore alla soglia di 0.05,pertanto si rifiuta l'ipotesi nulla di uguaglianza della media del Peso fra i due gruppi(Maschio,Femmina)
+---
+### Confronto della lunghezza per sesso
+
+```{r}
+ggplot(data, aes(x = Sesso, y = Lunghezza, fill = Sesso)) +
+  geom_boxplot() +
+  labs(
+    title = "Confronto della lunghezza per sesso",
+    x = "Sesso",
+    y = "Lunghezza (cm)"
+  ) +
+  theme_minimal()
+```
+
 ```{r}
 t.test(Lunghezza ~ Sesso, data = data)
 ```
-Lunghezza: Il test t confronta la lunghezza media dei neonati maschi e femmine. Il p-value di < 2.2e-16 (< 0.05) indica che ci sono differenze significative tra i sessi. I maschi hanno una lunghezza media di 499.67 cm, mentre le femmine hanno una lunghezza media di 489.76 cm.
 
+È stato effettuato un t-test a due campioni per saggiare l'ipotesi di differenza in media della lunghezza fra i due gruppi di sesso.Il p-value di \< 2.2e-16 (\< 0.05) indica che ci sono differenze significative del peso in media tra i sessi. I maschi hanno una lunghezza media di 499.67 cm, mentre le femmine hanno una lunghezza media di 489.76 cm.
+
+### Confronto della dimensione del cranio per sesso.
+
+```{r}
+ggplot(data, aes(x = Sesso, y = Cranio, fill = Sesso)) +
+  geom_boxplot() +
+  labs(
+    title = "Confronto del diametro del cranio per Sesso",
+    x = "Sesso",
+    y = "Cranio (mm)"
+  ) +
+  theme_minimal()
+```
 
 ```{r}
 model <- lm(Peso ~ Anni.madre + N.gravidanze + Fumatrici + 
@@ -87,18 +284,22 @@ model <- lm(Peso ~ Anni.madre + N.gravidanze + Fumatrici +
               Tipo.parto + Ospedale + Sesso, data = data)
 summary(model)
 ```
-Il modello iniziale include tutte le variabili predittive. Il summary mostra i coefficienti stimati, i p-value e l'R². Variabili con p-value < 0.05 sono considerate significative.
+
+Il modello iniziale include tutte le variabili predittive. Il summary mostra i coefficienti stimati, i p-value e l'R². Variabili con p-value \< 0.05 sono considerate significative.
+
 ```{r}
 stepwise_model <- stepAIC(model, direction = "both")
 summary(stepwise_model)
 ```
+
 La selezione stepwise basata sull'AIC ha rimosso le variabili non significative. Il modello finale include solo le variabili più rilevanti per prevedere il peso dei neonati.
 
 ```{r}
 par(mfrow = c(2,2))
 plot(stepwise_model)
 ```
-- Il grafico dei Residui vs Valori Predetti mostra che i valori si distribuiscono in modo casuale solo dopo i 2000 grammi circa. Per cercare di migliorare la diagnostica si verifichera successivamente la presenza di una relazione non lineare di alcune variabili.
+
+-   Il grafico dei Residui vs Valori Predetti mostra che i valori si distribuiscono in modo casuale solo dopo i 2000 grammi circa. Per cercare di migliorare la diagnostica si verifichera successivamente la presenza di una relazione non lineare di alcune variabili.
 
 ```{r}
 # Selezione delle variabili numeriche
@@ -108,51 +309,66 @@ variabili_numeriche <- data[, c("Anni.madre", "N.gravidanze", "Gestazione", "Pes
 pairs(variabili_numeriche, main = "Matrice di Scatter Plot delle Variabili Numeriche")
 
 ```
-- Introduciamo nel modello variabile Lunghezza al quadrato perchè nella matrice di scatterplot sembra avere una relazione quadreatica con il peso.
+
+-   Introduciamo nel modello variabile Lunghezza al quadrato perchè nella matrice di scatterplot sembra avere una relazione quadreatica con il peso.
 
 ```{r}
 model2 <- update(stepwise_model,~. +I(Lunghezza^2))
 summary(model2)
 ```
-- La relazione quadratica Lunghezza^2 ha un p-value < 0.05 pertanto è significativa. 
+
+-   La relazione quadratica Lunghezza\^2 ha un p-value \< 0.05 pertanto è significativa.
+
 ```{r}
 par(mfrow = c(2,2))
 plot(model2)
 ```
+
 -Il grafico dei Residui VS Valori Predetti ha una distribuzione piu randomica rispetto alla precedente diagnostica, pertanto il modello si puo considerare migliorato.
 
 <h2>Validazione del modello con train-test split</h2>
+
 ```{r}
 set.seed(123)
 train_index <- createDataPartition(data$Peso, p = 0.7, list = FALSE)
 train_data <- data[train_index, ]
 test_data <- data[-train_index, ]
 ```
+
 <h3>Addestramento del modello sul training set</h3>
+
 ```{r}
 stepwise_model_train <- stepAIC(stepwise_model, direction = "both", data = train_data)
 ```
+
 <h3>Previsioni sul test set (Primo modello)</h3>
+
 ```{r}
 predictions_test <- predict(stepwise_model_train, newdata = test_data)
 ```
+
 <h3>Metriche di performance</h3>
+
 ```{r}
 rmse_test <- sqrt(mean((test_data$Peso - predictions_test)^2))
 r2_test <- cor(test_data$Peso, predictions_test)^2
 cat("RMSE (Test):", rmse_test, "\nR-squared (Test):", r2_test, "\n")
 ```
+
 <h3>Addestramento del modello sul training set(Secondo Modello)</h3>
+
 ```{r}
 stepwise_model_train <- stepAIC(model2, direction = "both", data = train_data)
 ```
 
-
 <h3>Previsioni sul test set (Secondo modello)</h3>
+
 ```{r}
 predictions_test <- predict(stepwise_model_train, newdata = test_data)
 ```
+
 <h3>Metriche di performance</h3>
+
 ```{r}
 rmse_test <- sqrt(mean((test_data$Peso - predictions_test)^2))
 r2_test <- cor(test_data$Peso, predictions_test)^2
@@ -161,22 +377,23 @@ cat("RMSE (Test):", rmse_test, "\nR-squared (Test):", r2_test, "\n")
 
 -Il secondo modello, che considera la lunghezza al quadrato, ha un indice R quadro piu alto rispetto al primo, pertanto si puo dire che è piu affidabile nel effettuare stime predittive.
 
-
-
-L'RMSE di ```{r}round(rmse_test, 2)``` grammi indica che, in media, le previsioni del modello si discostano dai valori reali di circa  ```{r}round(rmse_test, 2)``` grammi. L'R² di ```{r}round(r2test, 2)``` suggerisce che il modello spiega circa il ```{r}round(r2_test * 100, 2)```% della variabilità del peso dei neonati.
-
+L'RMSE di `{r}round(rmse_test, 2)` grammi indica che, in media, le previsioni del modello si discostano dai valori reali di circa `{r}round(rmse_test, 2)` grammi. L'R² di `{r}round(r2test, 2)` suggerisce che il modello spiega circa il `{r}round(r2_test * 100, 2)`% della variabilità del peso dei neonati.
 
 <h2>Analisi comparativa tra ospedali</h2>
+
 <h3>Anova</h3>
+
 ```{r}
 anova_result <- aov(Peso ~ Ospedale, data = data)
 summary(anova_result)
 ```
-L'ANOVA confronta il peso medio dei neonati tra i tre ospedali. Il <b>p-value</b> di <b>0.183</b> (> 0.05) indica che non ci sono differenze significative.
+
+L'ANOVA confronta il peso medio dei neonati tra i tre ospedali. Il <b>p-value</b> di <b>0.183</b> (\> 0.05) indica che non ci sono differenze significative.
 
 <h2>Visualizzazioni</h2>
 
 <h3>Relazione tra durata della gravidanza e peso del neonato</h3>
+
 ```{r}
   ggplot(data, aes(x = Gestazione, y = Peso)) + 
   geom_point(alpha = 0.5) + 
@@ -184,8 +401,8 @@ L'ANOVA confronta il peso medio dei neonati tra i tre ospedali. Il <b>p-value</b
   ggtitle("Relazione tra durata della gravidanza e peso del neonato")
 ```
 
-
 <h3>Effetto del fumo materno sul neonato</h3>
+
 ```{r}
 ggplot(data, aes(x = as.factor(Fumatrici), y = Peso)) + 
   geom_boxplot(fill = "lightblue") + 
@@ -197,25 +414,10 @@ ggplot(data, aes(x = as.factor(Fumatrici), y = Peso)) +
 
 I neonati di madri fumatrici tendono ad avere un peso leggermente inferiore rispetto a quelli di madri non fumatrici.
 
-<h3>Distribuzione del peso neonatale per ospedale</h3>
-```{r}
-ggplot(data, aes(x = as.factor(Ospedale), y = Peso)) + 
-  geom_boxplot(fill = "lightgreen") + 
-  ggtitle("Distribuzione del peso neonatale per ospedale") +
-  xlab("Ospedale")
-```
-
-Non ci sono differenze evidenti nella distribuzione del peso tra i tre ospedali.
-
-<h3>Distribuzione della lunghezza neonatale per sesso</h3>
-```{r}
-ggplot(data, aes(x = Sesso, y = Lunghezza)) + 
-  geom_boxplot(fill = "lightpink") + 
-  ggtitle("Distribuzione della lunghezza neonatale per sesso")
-```
 
 
-<h2>Heatmap delle Correlazioni</h2>
+## Heatmap delle Correlazioni
+
 ```{r}
 cor_matrix <- cor(data %>% dplyr::select(Anni.madre, N.gravidanze, Fumatrici, Gestazione, Peso, Lunghezza, Cranio))
 cor_melted <- melt(cor_matrix)
@@ -256,4 +458,3 @@ cat("Il peso previsto della neonata per una madre non fumatrice, alla terza grav
 
 ```{r}
 ```
-
