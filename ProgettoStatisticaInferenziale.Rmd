@@ -13,6 +13,7 @@ knitr::opts_chunk$set(warning = FALSE)
 
 ```{r cars}
 # Caricamento delle librerie necessarie
+library(knitr) 
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -20,7 +21,6 @@ library(caret)
 library(MASS)
 library(car)
 library(reshape2)
-
 # Lettura dei dati
 data <- read.csv("neonati.csv")
 ```
@@ -34,33 +34,22 @@ head(data)
 ### Mappiamo le variabili categoriche in interi per eventuali successive analisi nella fase di creazione del modello di regressione
 
 ```{r}
-print(levels(data$Tipo.parto))
-print(levels(data$Ospedale))
-print(levels(data$Sesso))
-
 data$Tipo.parto <- as.factor(data$Tipo.parto)
 data$Ospedale <- as.factor(data$Ospedale)
 data$Sesso <- as.factor(data$Sesso)
-
 
 data$Tipo.parto_num <- as.numeric(data$Tipo.parto)
 data$osp_num <- as.numeric(data$Ospedale)
 data$sesso_num <- as.numeric(data$Sesso)
 
-
+print(levels(data$Tipo.parto))
+print(levels(data$Ospedale))
+print(levels(data$Sesso))
 
 head(data)
 ```
 
-### Suddividiamo in classi la variabile peso per visualizzarne la distribuzione.
 
-```{r}
-breaks <- seq(min(data$Peso),
-              max(data$Peso),
-              length.out=6)
-
-data$Peso_class<-cut(x = data$Peso,breaks = breaks,dig.lab = 10)
-```
 
 ```{r}
 # Caricamento del pacchetto necessario
@@ -79,12 +68,17 @@ kable(statistiche_peso, col.names = c("Statistiche", "Valore"), caption = "Stati
 
 ```
 
-```{r}
+### Suddividiamo in classi la variabile peso per visualizzarne la distribuzione.
 
+```{r}
+breaks <- seq(min(data$Peso),
+              max(data$Peso),
+              length.out=6)
+
+data$Peso_class<-cut(x = data$Peso,breaks = breaks,dig.lab = 10)
 ```
 
-
-## Visualizziamo le classi di peso
+## Visualizziamo la nuova variabile Peso suddivisa in classi
 
 ```{r}
 ggplot(data = data) +
@@ -157,9 +151,9 @@ ggplot(data = data)+
   labs(x= "Peso(120 intervalli)", y = "Count" )+
   geom_histogram(aes(x=cut(x = data$Peso,breaks = breaks,dig.lab = 10)),stat="count")
 ```
----
+
 Dal grafico a istogrammi si puo constatare che la distribuzione ha una distribuzione molto simile ad una normale.
----
+
 
 ## Verifica analitica sulla normalita della distribuzione.
 ### Eseguo un test per verificare se i dati del campione si distribuiscono come una normale.
@@ -167,7 +161,7 @@ Dal grafico a istogrammi si puo constatare che la distribuzione ha una distribuz
 shapiro.test(data$Peso)
 ```
 ---
-Il test ha un p-value molto inferiore a 0.05, pertanto il campione ha una distribuzione normale
+Il test di Shapiro-Wilk ha un valore W molto vicino ad 1, pertanto non si rifiuta l'ipotesi nulla, ovvero il campione si distribuisce normalmente.
 ---
 
 Si effettua un test t sulla variabile peso per saggiare l'ipotesi che la media del campione sia uguale alla media della popolazione, che in questo caso non è nota.
@@ -227,7 +221,6 @@ A livello grafico si può osservare che non ci sono significative differenze  fr
 ### Eseguiamo un t test a due campioni indipendenti per saggiare l'ipotesi che il peso medio sia significativamente diverso rispetto al sesso. 
 
 ```{r}
-library(broom)
 test <- t.test(Peso ~ Sesso, data = data)
 
 df_results <- data.frame(
@@ -279,17 +272,41 @@ ggplot(data, aes(x = Sesso, y = Cranio, fill = Sesso)) +
 ```
 
 ```{r}
+
+data_numeric <- data[ ,c("Anni.madre","N.gravidanze","Fumatrici","Gestazione","Peso","Lunghezza","Cranio","sesso_num","Tipo.parto_num","osp_num")]
+cor_matrix<-round(cor(data_numeric),2)
+kable(cor_matrix, digits = 2, caption = "Matrice di Correlazione")
+```
+Dalla tabella delle correlazioni si può vedere che le variabili ospedale e tipo parto non hanno una incidenza significativa con nessuna delle altre variabili, pertanto non verranno considerate a priori nella costruzione del modello di regressione.
+
+```{r}
+
+
+```
+
+
+```{r}
 model <- lm(Peso ~ Anni.madre + N.gravidanze + Fumatrici + 
-              Gestazione + Lunghezza + Cranio + 
-              Tipo.parto + Ospedale + Sesso, data = data)
-summary(model)
+              Gestazione + Lunghezza + Cranio + Sesso, data = data)
+summary_model <- summary(model)
+
+coeff_df <- as.data.frame(summary_model$coefficients)
+
+kable(coeff_df, digits = 3, caption = "Risultati del Modello di Regressione")
 ```
 
 Il modello iniziale include tutte le variabili predittive. Il summary mostra i coefficienti stimati, i p-value e l'R². Variabili con p-value \< 0.05 sono considerate significative.
 
 ```{r}
 stepwise_model <- stepAIC(model, direction = "both")
-summary(stepwise_model)
+
+
+summary_model <- summary(stepwise_model)
+
+coeff_df <- as.data.frame(summary_model$coefficients)
+
+kable(coeff_df, digits = 3, caption = "Risultati del Modello di Regressione dopo la selezione delle variabili con metodo stepwise AIC")
+
 ```
 
 La selezione stepwise basata sull'AIC ha rimosso le variabili non significative. Il modello finale include solo le variabili più rilevanti per prevedere il peso dei neonati.
@@ -314,7 +331,11 @@ pairs(variabili_numeriche, main = "Matrice di Scatter Plot delle Variabili Numer
 
 ```{r}
 model2 <- update(stepwise_model,~. +I(Lunghezza^2))
-summary(model2)
+summary_model <- summary(model2)
+
+coeff_df <- as.data.frame(summary_model$coefficients)
+
+kable(coeff_df, digits = 3, caption = "Risultati del Modello di Regressione con inclusa la relazione quadratica Lunghezza")
 ```
 
 -   La relazione quadratica Lunghezza\^2 ha un p-value \< 0.05 pertanto è significativa.
@@ -339,12 +360,20 @@ test_data <- data[-train_index, ]
 
 ```{r}
 stepwise_model_train <- stepAIC(stepwise_model, direction = "both", data = train_data)
+
+summary_model <- summary(stepwise_model_train)
+
+coeff_df <- as.data.frame(summary_model$coefficients)
+
+kable(coeff_df, digits = 3, caption = "Risultati del Modello di Regressione con inclusa la relazione quadratica Lunghezza")
 ```
 
 <h3>Previsioni sul test set (Primo modello)</h3>
 
 ```{r}
 predictions_test <- predict(stepwise_model_train, newdata = test_data)
+
+
 ```
 
 <h3>Metriche di performance</h3>
@@ -359,6 +388,11 @@ cat("RMSE (Test):", rmse_test, "\nR-squared (Test):", r2_test, "\n")
 
 ```{r}
 stepwise_model_train <- stepAIC(model2, direction = "both", data = train_data)
+summary_model <- summary(stepwise_model_train)
+
+coeff_df <- as.data.frame(summary_model$coefficients)
+
+kable(coeff_df, digits = 3, caption = "Risultati del Modello di Regressione con inclusa la relazione quadratica Lunghezza")
 ```
 
 <h3>Previsioni sul test set (Secondo modello)</h3>
@@ -390,9 +424,9 @@ summary(anova_result)
 
 L'ANOVA confronta il peso medio dei neonati tra i tre ospedali. Il <b>p-value</b> di <b>0.183</b> (\> 0.05) indica che non ci sono differenze significative.
 
-<h2>Visualizzazioni</h2>
+## Visualizzazioni Grafiche
 
-<h3>Relazione tra durata della gravidanza e peso del neonato</h3>
+### Relazione tra durata della gravidanza e peso del neonato
 
 ```{r}
   ggplot(data, aes(x = Gestazione, y = Peso)) + 
@@ -401,7 +435,7 @@ L'ANOVA confronta il peso medio dei neonati tra i tre ospedali. Il <b>p-value</b
   ggtitle("Relazione tra durata della gravidanza e peso del neonato")
 ```
 
-<h3>Effetto del fumo materno sul neonato</h3>
+### Effetto del fumo materno sul neonato
 
 ```{r}
 ggplot(data, aes(x = as.factor(Fumatrici), y = Peso)) + 
@@ -430,6 +464,13 @@ ggplot(cor_melted, aes(x = Var1, y = Var2, fill = value)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+Per quanto riguarda la correlazione fra durata della gravidanza e se la madre sia una fumatrice, questa è trascurabile.
+
+Invece c'è una significativa ma non elevata correlazione negativa fra durata della gravidanza ,eta della madre e anche con il numero di gravidanze.00
+
+
+
+
 
 ```{r}
 # Creazione di un nuovo caso da predire
